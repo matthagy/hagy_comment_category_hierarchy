@@ -7,13 +7,19 @@ import pickle
 import backoff
 import numpy as np
 import openai
+import pandas as pd
 import tiktoken
 from tqdm import tqdm
+
+from nodes import TreeNode
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 COMMENTS_PATH = DATA_DIR / "comments.csv"
 COMMENT_EMBEDDINGS_PATH = DATA_DIR / "comments_embeddings.npz"
 CLUSTERS_PATH = DATA_DIR / "clusters.p"
+TITLES_PATH = DATA_DIR / "titles.csv"
+
+RANDOM_SEED = 0xCAFE
 
 OPENAI_API_KEY_PATH = Path("~/.openai-api-key").expanduser()
 CHAT_COMPLETE_MODEL = "gpt-3.5-turbo"
@@ -24,7 +30,9 @@ BACKOFF_RETRY_EXCEPTIONS = (ConnectionError,
                             openai.error.RateLimitError,
                             openai.error.Timeout,
                             openai.error.APIConnectionError)
-BACKOFF_MAX_RETRIES = 4
+BACKOFF_MAX_WAIT = 10
+BACKOFF_WAIT_FACTOR = 2
+BACKOFF_MAX_RETRIES = 7
 
 T = TypeVar('T')
 
@@ -125,8 +133,13 @@ def set_openai_key():
     openai.api_key = open(OPENAI_API_KEY_PATH).read().strip()
 
 
+def apply_backoff(func: Callable):
+    return backoff.on_exception(backoff.expo, BACKOFF_RETRY_EXCEPTIONS, max_tries=BACKOFF_MAX_RETRIES,
+                                factor=BACKOFF_WAIT_FACTOR, max_value=BACKOFF_MAX_WAIT)(func)
+
+
 @lru_cache(maxsize=2_000)
-@backoff.on_exception(backoff.expo, BACKOFF_RETRY_EXCEPTIONS, max_tries=BACKOFF_MAX_RETRIES)
+@apply_backoff
 def get_embedding(text: str, model: str = EMBEDDING_MODEL) -> np.ndarray:
     result = openai.Embedding.create(
         model=model,
@@ -135,8 +148,25 @@ def get_embedding(text: str, model: str = EMBEDDING_MODEL) -> np.ndarray:
     return np.array(result["data"][0]["embedding"])
 
 
-@backoff.on_exception(backoff.expo, BACKOFF_RETRY_EXCEPTIONS, max_tries=BACKOFF_MAX_RETRIES)
-def chat_complete_stream(query: str, model: str, system_content: str = "You are a helpful assistant.", **kwds) -> str:
+@apply_backoff
+def chat_complete(query: str, model: str = CHAT_COMPLETE_MODEL, system_content: str = "You are a helpful assistant.",
+                  timeout=30, request_timeout=30, **kwds) -> list[dict]:
+    response = openai.ChatCompletion.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": query},
+        ],
+        timeout=timeout, request_timeout=request_timeout,
+        **kwds
+    )
+    return response['choices']
+
+
+@apply_backoff
+def chat_complete_stream(query: str, model: str = CHAT_COMPLETE_MODEL,
+                         system_content: str = "You are a helpful assistant.",
+                         timeout=30, request_timeout=30, **kwds) -> str:
     response = openai.ChatCompletion.create(
         model=model,
         messages=[
@@ -144,6 +174,7 @@ def chat_complete_stream(query: str, model: str, system_content: str = "You are 
             {"role": "user", "content": query},
         ],
         stream=True,
+        timeout=timeout, request_timeout=request_timeout,
         **kwds
     )
 
@@ -155,3 +186,19 @@ def chat_complete_stream(query: str, model: str, system_content: str = "You are 
             parts.append(c)
     print()
     return ''.join(parts)
+
+
+def load_comments_wo_urls() -> pd.DataFrame:
+    comments: pd.DataFrame = pd.read_csv(COMMENTS_PATH).set_index('id')
+    comments['body'] = comments['body'].map(lambda b: URL_REGEX.subn(' ', b)[0])
+    comments['token_count'] = comments['body'].map(count_tokens)
+    return comments
+
+
+def sample_node_bodies(node: TreeNode, comments: pd.DataFrame, max_tokens: int = 3700, max_comments: int = 30) -> str:
+    node_comments: pd.DataFrame = comments.loc[node.get_comment_ids()]
+    if len(node_comments) > max_comments:
+        node_comments = node_comments.sample(max_comments, random_state=RANDOM_SEED, weights='likes')
+    node_comments['cum_tokens'] = node_comments['token_count'].cumsum()
+    node_comments = node_comments[node_comments['cum_tokens'] <= max_tokens]
+    return '\n'.join('* ' + ' '.join(body.split()) for body in node_comments['body'])

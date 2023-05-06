@@ -5,14 +5,12 @@ Computes comment embeddings using OpenAI's `text-embedding-ada-002` model
 import numpy as np
 import pandas as pd
 
-from util import (COMMENTS_PATH, COMMENT_EMBEDDINGS_PATH, get_embedding, set_openai_key, count_tokens,
-                  URL_REGEX, iter_with_progress, save_using_tmp)
+from util import (COMMENT_EMBEDDINGS_PATH, load_comments_wo_urls, get_embedding, set_openai_key,
+                  iter_with_progress, save_using_tmp)
 
 
 def main():
-    comments: pd.DataFrame = pd.read_csv(COMMENTS_PATH).set_index('id')
-    comments['body'] = comments['body'].map(lambda b: URL_REGEX.subn(' ', b)[0])
-    comments['token_count'] = comments['body'].map(count_tokens)
+    comments = load_comments_wo_urls()
     comments = comments[comments['token_count'].between(80, 1000)]
 
     embeddings: pd.Series = load_embeddings()

@@ -18,6 +18,7 @@ COMMENTS_PATH = DATA_DIR / "comments.csv"
 COMMENT_EMBEDDINGS_PATH = DATA_DIR / "comments_embeddings.npz"
 CLUSTERS_PATH = DATA_DIR / "clusters.p"
 TITLES_PATH = DATA_DIR / "titles.csv"
+SUMMARIES_PATH = DATA_DIR / "summaries.csv"
 
 RANDOM_SEED = 0xCAFE
 
@@ -30,8 +31,8 @@ BACKOFF_RETRY_EXCEPTIONS = (ConnectionError,
                             openai.error.RateLimitError,
                             openai.error.Timeout,
                             openai.error.APIConnectionError)
-BACKOFF_MAX_WAIT = 10
 BACKOFF_WAIT_FACTOR = 2
+BACKOFF_MAX_WAIT = 10
 BACKOFF_MAX_RETRIES = 7
 
 T = TypeVar('T')

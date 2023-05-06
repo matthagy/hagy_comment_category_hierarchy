@@ -1,8 +1,8 @@
+import pickle
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import cast, Iterable, Optional, Union, Sized, TypeVar, Callable, Any
-import pickle
 
 import backoff
 import numpy as np
@@ -13,12 +13,14 @@ from tqdm import tqdm
 
 from nodes import TreeNode
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+ROOT_DIR = Path(__file__).parent.parent
+DATA_DIR = ROOT_DIR / "data"
 COMMENTS_PATH = DATA_DIR / "comments.csv"
 COMMENT_EMBEDDINGS_PATH = DATA_DIR / "comments_embeddings.npz"
 CLUSTERS_PATH = DATA_DIR / "clusters.p"
 TITLES_PATH = DATA_DIR / "titles.csv"
 SUMMARIES_PATH = DATA_DIR / "summaries.csv"
+NODE_EXPORT_TS_PATH = ROOT_DIR / "site/nodes.ts"
 
 RANDOM_SEED = 0xCAFE
 

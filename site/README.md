@@ -14,7 +14,5 @@ Additionally, it can be deployed to a GitHub Pages site by running the following
 Note you'll have to change the `repository.url` field in `package.json` to match your repository.
 
 ```bash
-
-```bash
 npm run deploy
 ```

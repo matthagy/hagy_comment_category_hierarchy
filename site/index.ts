@@ -88,7 +88,7 @@ const g = svg.append("g")
 
 const treeLayout = d3.tree<Node>()
     .size([width, height])
-    .nodeSize([40, 400])
+    .nodeSize([50, 400])
 ;
 
 function updateSvgSize() {
@@ -171,7 +171,7 @@ function nodeShapeAppend(selection: NodePathType): NodeShapeType {
 }
 
 function nodeRadius(d: d3.HierarchyPointNode<Node>) {
-    return 3 * Math.pow(d.data.count, 0.4);
+    return 4 * Math.pow(d.data.count, 0.4);
 }
 
 

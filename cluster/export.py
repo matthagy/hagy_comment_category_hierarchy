@@ -4,6 +4,7 @@ Export the clusters to a JSON file for visualization in the site
 import json
 import pickle
 import re
+from dataclasses import dataclass
 from typing import cast, Any
 
 import pandas as pd
@@ -15,7 +16,7 @@ from nodes import BranchNode, TreeNode
 from util import COMMENTS_PATH, CLUSTERS_PATH, NODE_EXPORT_TS_PATH, save_using_tmp
 from vectorize_comments import load_embeddings
 
-EXPORT_INTERFACE = '''
+EXPORT_TEMPLATE = '''
 export interface NodeData {
   id: string;
   count: number;
@@ -27,6 +28,8 @@ export interface NodeData {
   summary: string;
   children: NodeData[];
 }
+
+export const node_data: NodeData = JSON_NODE_DATA_REPLACE;
 '''.strip()
 
 PUNCTUATION_RE = re.compile(r"[^\w\s-]|[^\w\s]-[^\w\s]")
@@ -38,14 +41,10 @@ def main():
     embeddings: pd.Series = load_embeddings()
     titles = load_titles()
     summaries = load_summaries()
-    exporter = Exporter(comments, embeddings, titles, summaries)
+    exporter = Exporter(comments=comments, embeddings=embeddings, titles=titles, summaries=summaries)
     export = exporter.export_node(top_node)
 
-    export_ts = f'''
-{EXPORT_INTERFACE}
-
-export const node_data: NodeData = {json.dumps(export, indent=2)};
-    '''.strip()
+    export_ts = EXPORT_TEMPLATE.replace('JSON_NODE_DATA_REPLACE', json.dumps(export, indent=2))
 
     def write(path):
         with open(path, 'wt') as f:
@@ -54,17 +53,12 @@ export const node_data: NodeData = {json.dumps(export, indent=2)};
     save_using_tmp(NODE_EXPORT_TS_PATH, write)
 
 
+@dataclass(frozen=True)
 class Exporter:
     comments: pd.DataFrame
     embeddings: pd.Series
     titles: pd.Series
     summaries: pd.Series
-
-    def __init__(self, comments: pd.DataFrame, embeddings: pd.Series, titles: pd.Series, summaries: pd.Series):
-        self.comments = comments
-        self.embeddings = embeddings
-        self.titles = titles
-        self.summaries = summaries
 
     def export_node(self, node: TreeNode) -> dict[str, Any]:
         comment_ids = node.get_comment_ids()

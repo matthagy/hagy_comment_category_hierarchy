@@ -17,10 +17,6 @@ class TreeNode(ABC):
         pass
 
     @abstractmethod
-    def iter_leaves(self) -> Iterable['LeafNode']:
-        pass
-
-    @abstractmethod
     def iter_nodes(self) -> Iterable['TreeNode']:
         pass
 
@@ -32,10 +28,7 @@ class LeafNode(TreeNode):
     def get_comment_ids(self) -> list[int]:
         return list(self.comment_ids)
 
-    def iter_leaves(self) -> Iterable['LeafNode']:
-        yield self
-
-    def iter_nodes(self) -> Iterable['TreeNode']:
+    def iter_nodes(self) -> Iterable[TreeNode]:
         yield self
 
 
@@ -46,11 +39,7 @@ class BranchNode(TreeNode):
     def get_comment_ids(self) -> list[int]:
         return [ix for c in self.children for ix in c.get_comment_ids()]
 
-    def iter_leaves(self) -> Iterable['LeafNode']:
-        for c in self.children:
-            yield from c.iter_leaves()
-
-    def iter_nodes(self) -> Iterable['TreeNode']:
+    def iter_nodes(self) -> Iterable[TreeNode]:
         yield self
         for c in self.children:
             yield from c.iter_nodes()

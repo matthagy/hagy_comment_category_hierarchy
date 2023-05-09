@@ -1,5 +1,4 @@
 import * as d3 from "d3";
-import {node_data, NodeData} from "./nodes";
 import {BaseType} from "d3";
 import './main.css';
 
@@ -62,13 +61,32 @@ class Node {
     }
 }
 
+export interface NodeData {
+    id: string;
+    count: number;
+    medianLikes: number;
+    avgLikes: number;
+    maxLikes: number;
+    commentRms: number;
+    titles: string[];
+    summary: string;
+    children: NodeData[];
+}
+
 function createNode(data: NodeData): Node {
     return new Node(data.id, data.titles, data.summary,
         data.count, data.medianLikes, data.avgLikes, data.maxLikes, data.commentRms,
         (data.children ?? []).map(createNode));
 }
 
-const topLevelNode = createNode(node_data);
+let topLevelNode: Node | null = null;// = createNode(node_data);
+
+function getTopLevelNode(): Node {
+    if (topLevelNode === null) {
+        throw new Error("Top level node not initialized");
+    }
+    return topLevelNode;
+}
 
 const width = 1800;
 const height = 800;
@@ -107,8 +125,15 @@ window.addEventListener("resize", () => {
 });
 
 
-let rootNode = d3.hierarchy(topLevelNode, d => d.getChildren());
-let layoutNode = treeLayout(rootNode);
+let rootNode: d3.HierarchyNode<Node> | undefined; // d3.hierarchy(topLevelNode, d => d.getChildren());
+let layoutNode: d3.HierarchyPointNode<Node> | undefined; // = treeLayout(rootNode);
+
+function getLayoutNode(): d3.HierarchyPointNode<Node> {
+    if (layoutNode === undefined) {
+        throw new Error("layoutNode not initialized");
+    }
+    return layoutNode;
+}
 
 type NodeSelectionType = d3.Selection<BaseType, d3.HierarchyPointNode<Node>, SVGGElement, unknown>;
 type LinkPathType = d3.Selection<SVGPathElement, d3.HierarchyPointNode<Node>, SVGGElement, unknown>
@@ -118,13 +143,13 @@ type NodeTextType = d3.Selection<SVGTextElement, d3.HierarchyPointNode<Node>, SV
 
 function selectLinks(): NodeSelectionType {
     return g.selectAll(".link")
-        .data(layoutNode.descendants().slice(1));
+        .data(getLayoutNode().descendants().slice(1));
 }
 
 function selectNodes(): NodeSelectionType {
     return g
         .selectAll(".node")
-        .data(layoutNode.descendants());
+        .data(getLayoutNode().descendants());
 }
 
 function linkAppend(selection: NodeSelectionType): LinkPathType {
@@ -190,7 +215,7 @@ function nodeShapeStyle(selection: NodeShapeType): NodeShapeType {
             } else {
                 console.log(`Bare clicked ${d.data.titles[0]} ${d.data.visible}}`);
                 displayNodeInfo(d.data);
-                topLevelNode.visit(node => node.selected = false);
+                getTopLevelNode().visit(node => node.selected = false);
                 d.data.selected = true;
                 update();
             }
@@ -212,36 +237,44 @@ function nodeTextStyle(selection: NodeTextType): NodeTextType {
 }
 
 
-let existingLink = linkStyle(linkAppend(selectLinks()));
-let existingNode = nodeStyle(nodeAppend(selectNodes()));
-let existingNodeShape = nodeShapeStyle(nodeShapeAppend(existingNode));
-let existingNodeText = nodeTextStyle(nodeTextAppend(existingNode));
+let existingLink : LinkPathType | undefined; // = linkStyle(linkAppend(selectLinks()));
+let existingNode: NodePathType | undefined; // = nodeStyle(nodeAppend(selectNodes()));
+let existingNodeShape: NodeShapeType | undefined; // = nodeShapeStyle(nodeShapeAppend(existingNode));
+let existingNodeText: NodeTextType | undefined; // = nodeTextStyle(nodeTextAppend(existingNode));
 
 function update() {
     console.log("update");
 
-    rootNode = d3.hierarchy(topLevelNode, d => d.getChildren());
+    rootNode = d3.hierarchy(getTopLevelNode(), d => d.getChildren());
     layoutNode = treeLayout(rootNode);
 
-    const newLinks = linkAppend(selectLinks());
-    const mergeLinks = linkStyle(newLinks.merge(existingLink));
-    mergeLinks.exit().remove();
-    existingLink = mergeLinks;
+    let newLinks = linkAppend(selectLinks());
+    if (existingLink !== undefined) {
+        newLinks = newLinks.merge(existingLink);
+    }
+    linkStyle(newLinks).exit().remove();
+    existingLink = newLinks;
 
-    const newNode = nodeAppend(selectNodes());
-    const mergeNode = nodeStyle(newNode.merge(existingNode));
-    mergeNode.exit().remove();
-    existingNode = mergeNode;
+    let newNode = nodeAppend(selectNodes());
+    if (existingNode !== undefined) {
+        newNode = newNode.merge(existingNode);
+    }
+    nodeStyle(newNode).exit().remove();
+    existingNode = newNode;
 
-    const newNodeShape = nodeShapeAppend(newNode);
-    const mergeNodeShape = nodeShapeStyle(newNodeShape.merge(existingNodeShape));
-    mergeNodeShape.exit().remove();
-    existingNodeShape = mergeNodeShape;
+    let newNodeShape = nodeShapeAppend(newNode);
+    if (existingNodeShape !== undefined) {
+        newNodeShape = newNodeShape.merge(existingNodeShape);
+    }
+    nodeShapeStyle(newNodeShape).exit().remove()
+    existingNodeShape = newNodeShape;
 
-    const newNodeText = nodeTextAppend(newNode);
-    const mergeNodeText = nodeTextStyle(newNodeText.merge(existingNodeText));
-    mergeNodeText.exit().remove();
-    existingNodeText = mergeNodeText;
+    let newNodeText = nodeTextAppend(newNode);
+    if (existingNodeText !== undefined) {
+        newNodeText = newNodeText.merge(existingNodeText);
+    }
+    nodeTextStyle(newNodeText).exit().remove();
+    existingNodeText = newNodeText;
 }
 
 const statsList = document.getElementById("node-stats");
@@ -263,7 +296,7 @@ function createLi(text: string): HTMLLIElement {
 function displayNodeInfo(node: Node) {
     if (statsList !== null) {
         removeChildren(statsList);
-        const percent = 100 * node.count / topLevelNode.count;
+        const percent = 100 * node.count / getTopLevelNode().count;
         statsList.appendChild(createLi(`${percent.toFixed(1)}% of comments`));
         statsList.appendChild(createLi(`${node.medianLikes} median likes`));
         statsList.appendChild(createLi(`${node.avgLikes} average likes`));
@@ -288,20 +321,32 @@ function displayNodeInfo(node: Node) {
     }
 }
 
-displayNodeInfo(topLevelNode);
-topLevelNode.selected = true;
-update();
+fetch("static/node_data.json")
+    .then(response => response.json())
+    .then(data => {
+        console.log("fetched data")
+        topLevelNode = createNode(data);
+        displayNodeInfo(topLevelNode);
+        topLevelNode.selected = true;
+
+        rootNode = d3.hierarchy(topLevelNode, d => d.getChildren());
+        layoutNode = treeLayout(rootNode);
+        update();
+
+        // Add zoom behavior to the svg element
+        const zoom = d3
+            .zoom<SVGSVGElement, unknown>()
+            //.scaleExtent([0.5, 5])
+            //.translateExtent([[0, 0], [width, height]])
+            .on("zoom", e => {
+                // console.log(`Zoom: ${e.transform}`);
+                g.attr("transform", initialZoomTransform +
+                    e.transform.toString());
+            });
+        svg.call(zoom);
+        console.log("init finished")
+    })
+    .catch(error => console.log(error));
 
 
-// Add zoom behavior to the svg element
-const zoom = d3
-    .zoom<SVGSVGElement, unknown>()
-    //.scaleExtent([0.5, 5])
-    //.translateExtent([[0, 0], [width, height]])
-    .on("zoom", e => {
-        // console.log(`Zoom: ${e.transform}`);
-        g.attr("transform", initialZoomTransform +
-            e.transform.toString());
-    });
-svg.call(zoom);
 

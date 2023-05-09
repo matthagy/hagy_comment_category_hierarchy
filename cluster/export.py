@@ -13,7 +13,7 @@ from cluster import cluster_rms
 from generate_summaries import load_summaries
 from generate_titles import load_titles
 from nodes import BranchNode, TreeNode
-from util import COMMENTS_PATH, CLUSTERS_PATH, NODE_EXPORT_TS_PATH, save_using_tmp
+from util import COMMENTS_PATH, CLUSTERS_PATH, NODE_EXPORT_TS_PATH, ROOT_DIR, save_using_tmp
 from vectorize_comments import load_embeddings
 
 EXPORT_TEMPLATE = '''
@@ -44,13 +44,20 @@ def main():
     exporter = Exporter(comments=comments, embeddings=embeddings, titles=titles, summaries=summaries)
     export = exporter.export_node(top_node)
 
-    export_ts = EXPORT_TEMPLATE.replace('JSON_NODE_DATA_REPLACE', json.dumps(export, indent=2))
+    json_export = json.dumps(export, indent=2)
+    export_ts = EXPORT_TEMPLATE.replace('JSON_NODE_DATA_REPLACE', json_export)
 
     def write(path):
         with open(path, 'wt') as f:
             print(export_ts, file=f)
 
-    save_using_tmp(NODE_EXPORT_TS_PATH, write)
+    # save_using_tmp(NODE_EXPORT_TS_PATH, write)
+
+    def write2(path):
+        with open(path, 'wt') as f:
+            print(json_export, file=f)
+
+    save_using_tmp(ROOT_DIR / 'site' / 'static' / 'node_data.json', write2)
 
 
 @dataclass(frozen=True)

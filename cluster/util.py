@@ -7,6 +7,7 @@ from typing import cast, Iterable, Optional, Union, Sized, TypeVar, Callable, An
 import backoff
 import numpy as np
 import openai
+import openai.error
 import pandas as pd
 import tiktoken
 from tqdm import tqdm
